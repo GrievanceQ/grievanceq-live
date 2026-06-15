@@ -129,7 +129,7 @@ function speakEL(text,isTamil,onEnd){
 
 // ── ANTHROPIC AI via Vercel Proxy ─────────────────────────
 async function callClaude(messages,system){
-  const r=await fetch("/api/chat",{
+  const r=await fetch("https://green-hat-9cc4.p-kannan10.workers.dev",{
     method:"POST",
     headers:{"Content-Type":"application/json"},
     body:JSON.stringify({
