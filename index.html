@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>GrievanceQ — Tamil Nadu Municipal AI</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Tamil:wght@400;600;700&family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',system-ui,sans-serif;background:#F0EAE0;min-height:100vh;display:flex;flex-direction:column}
+::-webkit-scrollbar{width:5px}
+::-webkit-scrollbar-thumb{background:#DDD0BE;border-radius:3px}
+@keyframes wave{0%{height:8px}100%{height:26px}}
+@keyframes spin{to{transform:rotate(360deg)}}
+.tamil{font-family:'Noto Sans Tamil',system-ui,sans-serif}
+</style>
+</head>
+<body>
+
+<div id="app"></div>
+
+<script>
+// ── API KEYS ──────────────────────────────────────────────
+// API key stored securely in Vercel - called via proxy
+const ELEVEN_KEY     = "sk_a8598f5ae0650915f15ee40bdbcc6513e2c0e21e401a3c5c";
+const VOICE_TAMIL    = "EaBs7G1VibMrNAuz2Na7";   // Monika Soma
+const VOICE_ENGLISH  = "EaBs7G1VibMrNAuz2Na7";   // Monika Soma
+
+// ── PINCODE DATABASE ─────────────────────────────────────
+const PINCODE_DB = {
+  "641001":{city:"Coimbatore",zone:"Central",ward:"Gandhipuram",corporation:"Coimbatore City",op:"CCMC"},
+  "641002":{city:"Coimbatore",zone:"North",ward:"RS Puram",corporation:"Coimbatore City",op:"CCMC"},
+  "641003":{city:"Coimbatore",zone:"West",ward:"Saibaba Colony",corporation:"Coimbatore City",op:"CCMC"},
+  "641004":{city:"Coimbatore",zone:"East",ward:"Singanallur",corporation:"Coimbatore City",op:"CCMC"},
+  "641005":{city:"Coimbatore",zone:"South",ward:"Ganapathy",corporation:"Coimbatore City",op:"CCMC"},
+  "641006":{city:"Coimbatore",zone:"West",ward:"Peelamedu",corporation:"Coimbatore City",op:"CCMC"},
+  "641007":{city:"Coimbatore",zone:"North",ward:"Kavundampalayam",corporation:"Coimbatore City",op:"CCMC"},
+  "641008":{city:"Coimbatore",zone:"Central",ward:"Ukkadam",corporation:"Coimbatore City",op:"CCMC"},
+  "641011":{city:"Coimbatore",zone:"East",ward:"Vadavalli",corporation:"Coimbatore City",op:"CCMC"},
+  "641012":{city:"Coimbatore",zone:"South",ward:"Thudiyalur",corporation:"Coimbatore City",op:"CCMC"},
+  "600001":{city:"Chennai",zone:"Central",ward:"Park Town",corporation:"Greater Chennai",op:"GCC"},
+  "600002":{city:"Chennai",zone:"South",ward:"Mylapore",corporation:"Greater Chennai",op:"GCC"},
+  "600004":{city:"Chennai",zone:"Central",ward:"Nungambakkam",corporation:"Greater Chennai",op:"GCC"},
+  "600017":{city:"Chennai",zone:"South",ward:"T Nagar",corporation:"Greater Chennai",op:"GCC"},
+  "600020":{city:"Chennai",zone:"South",ward:"Adyar",corporation:"Greater Chennai",op:"GCC"},
+  "625001":{city:"Madurai",zone:"Central",ward:"Madurai Central",corporation:"Madurai City",op:"MCMC"},
+  "625009":{city:"Madurai",zone:"South",ward:"Anna Nagar",corporation:"Madurai City",op:"MCMC"},
+  "620001":{city:"Trichy",zone:"Central",ward:"Trichy Central",corporation:"Trichy City",op:"TCMC"},
+  "620002":{city:"Trichy",zone:"South",ward:"Ariyamangalam",corporation:"Trichy City",op:"TCMC"},
+  "636001":{city:"Salem",zone:"Central",ward:"Salem Central",corporation:"Salem City",op:"SCMC"},
+  "641601":{city:"Tiruppur",zone:"Central",ward:"Tiruppur Central",corporation:"Tiruppur City",op:"TPMC"},
+};
+
+const DEPTS=[
+  {id:"water",label:"Water Supply",tamil:"தண்ணீர் வழங்கல்",emoji:"💧",color:"#1A6A9A",sla:"48h",kw:["water","tap","pipe","தண்ணீர்","குழாய்"]},
+  {id:"lights",label:"Street Lighting",tamil:"தெரு விளக்கு",emoji:"💡",color:"#C8921A",sla:"24h",kw:["light","street","lamp","விளக்கு"]},
+  {id:"roads",label:"Roads & Footpaths",tamil:"சாலை பழுது",emoji:"🛣️",color:"#5A3E8A",sla:"72h",kw:["road","pothole","footpath","சாலை"]},
+  {id:"garbage",label:"Garbage Collection",tamil:"குப்பை சேகரிப்பு",emoji:"🗑️",color:"#2A7A2A",sla:"24h",kw:["garbage","waste","trash","குப்பை"]},
+  {id:"drainage",label:"Drainage",tamil:"வடிகால் தடை",emoji:"🌊",color:"#0A7B7B",sla:"48h",kw:["drain","flood","waterlog","வடிகால்"]},
+  {id:"sewage",label:"Sewage",tamil:"சாக்கடை கழிவு",emoji:"🔧",color:"#8A3A2A",sla:"48h",kw:["sewage","sewer","சாக்கடை"]},
+  {id:"canteen",label:"Amma Canteen",tamil:"அம்மா உணவகம்",emoji:"🍛",color:"#C8520A",sla:"12h",kw:["canteen","meal","food","உணவு","அம்மா"]},
+  {id:"school",label:"Govt Schools",tamil:"அரசு பள்ளி",emoji:"🏫",color:"#1A5A1A",sla:"72h",kw:["school","education","midday","பள்ளி"]},
+];
+
+const OFFICERS={
+  water:{CCMC:"JE Murugesan K",GCC:"JE Parthasarathy R",MCMC:"JE Selvam A",TCMC:"JE Rajan M",SCMC:"JE Pandi S",TPMC:"JE Arun K"},
+  lights:{CCMC:"AE Priya S",GCC:"AE Venkatesh N",MCMC:"AE Malathi R",TCMC:"AE Anbu T",SCMC:"AE Priya M",TPMC:"AE Devi R"},
+  roads:{CCMC:"AEE Selvam R",GCC:"AEE Krishnan M",MCMC:"AEE Bala V",TCMC:"AEE Kumar S",SCMC:"AEE Raj T",TPMC:"AEE Velu P"},
+  garbage:{CCMC:"SI Devi M",GCC:"SI Radhika T",MCMC:"SI Mani K",TCMC:"SI Praba R",SCMC:"SI Geetha K",TPMC:"SI Meena S"},
+  drainage:{CCMC:"JE Kannan P",GCC:"JE Suresh V",MCMC:"JE Ramesh T",TCMC:"JE Senthil R",SCMC:"JE Babu M",TPMC:"JE Raj V"},
+  sewage:{CCMC:"AEE Rajan T",GCC:"AEE Mohan R",MCMC:"AEE Babu K",TCMC:"AEE Vel M",SCMC:"AEE Rani S",TPMC:"AEE Mani K"},
+  canteen:{CCMC:"SUP Meena A",GCC:"SUP Lalitha K",MCMC:"SUP Sumathi",TCMC:"SUP Kavitha",SCMC:"SUP Uma R",TPMC:"SUP Selvi"},
+  school:{CCMC:"DEO Lakshmi V",GCC:"DEO Bharathi S",MCMC:"DEO Usha K",TCMC:"DEO Revathi",SCMC:"DEO Prema T",TPMC:"DEO Geetha"},
+};
+
+// ── HELPERS ───────────────────────────────────────────────
+function genId(){return"GQ-"+Date.now().toString(36).toUpperCase().slice(-6)}
+function rand(a){return a[Math.floor(Math.random()*a.length)]}
+function lookupPin(p){return PINCODE_DB[p?.trim()]||null}
+function detectDept(t){
+  const txt=t.toLowerCase();let best=null,bs=0;
+  for(const d of DEPTS){const s=d.kw.filter(k=>txt.includes(k)).length;if(s>bs){bs=s;best=d;}}
+  return bs>0?best:null;
+}
+function detectLang(t){
+  const tc=(t.match(/[\u0B80-\u0BFF]/g)||[]).length;
+  if(tc>2)return"tamil";
+  const tw=["vanakkam","nandri","enna","illai","inga","thanni","theru"];
+  if(tw.filter(w=>t.toLowerCase().includes(w)).length>=2)return"tamil";
+  return"english";
+}
+
+// ── BROWSER VOICE (no ElevenLabs needed) ─────────────────
+function speakEL(text,isTamil,onEnd){
+  if(!window.speechSynthesis){onEnd&&onEnd();return;}
+  window.speechSynthesis.cancel();
+  const u=new SpeechSynthesisUtterance(text);
+
+  const trySpeak=()=>{
+    const voices=window.speechSynthesis.getVoices();
+    // Try to find best Tamil or English Indian female voice
+    const tamFemale=voices.find(v=>(v.lang==="ta-IN"||v.lang==="ta")&&/female|woman/i.test(v.name));
+    const tamAny=voices.find(v=>v.lang==="ta-IN"||v.lang==="ta");
+    const enInFemale=voices.find(v=>v.lang==="en-IN"&&/female|woman|heera|priya/i.test(v.name));
+    const enIn=voices.find(v=>v.lang==="en-IN");
+    const enFemale=voices.find(v=>v.lang.startsWith("en")&&/female|woman/i.test(v.name));
+
+    if(isTamil){
+      u.voice=tamFemale||tamAny||enInFemale||enIn||enFemale||null;
+      u.lang="ta-IN";
+      u.rate=0.82;
+      u.pitch=1.2;
+    } else {
+      u.voice=enInFemale||enIn||enFemale||null;
+      u.lang="en-IN";
+      u.rate=0.9;
+      u.pitch=1.1;
+    }
+    u.volume=1;
+    u.onend=onEnd;
+    u.onerror=()=>{onEnd&&onEnd();};
+    window.speechSynthesis.speak(u);
+  };
+
+  const v=window.speechSynthesis.getVoices();
+  if(v.length>0) trySpeak();
+  else window.speechSynthesis.onvoiceschanged=trySpeak;
+}
+
+// ── ANTHROPIC AI via Vercel Proxy ─────────────────────────
+async function callClaude(messages,system){
+  const r=await fetch("/api/chat",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({
+      model:"claude-haiku-4-5-20251001",
+      max_tokens:500,
+      system:system,
+      messages:messages
+    })
+  });
+  if(!r.ok){
+    const err=await r.text();
+    console.error("Claude API error:",r.status,err);
+    throw new Error("Claude API error: "+r.status);
+  }
+  const d=await r.json();
+  return d.content?.[0]?.text||"";
+}
+
+// ── SEED DATA ─────────────────────────────────────────────
+function seedData(){
+  const rows=[
+    {dept:"water",issue:"No water supply for 3 days",pin:"641005",status:"Filed",ch:"Voice"},
+    {dept:"lights",issue:"Street light not working near school",pin:"641002",status:"Assigned",ch:"WhatsApp"},
+    {dept:"roads",issue:"Large pothole causing accidents",pin:"600017",status:"In Progress",ch:"Voice"},
+    {dept:"garbage",issue:"Garbage van skipping our street",pin:"625001",status:"Resolved",ch:"Voice",rating:4},
+    {dept:"drainage",issue:"Drain blocked, waterlogging",pin:"620002",status:"Filed",ch:"Web"},
+    {dept:"sewage",issue:"Sewage overflow on main road",pin:"641001",status:"Assigned",ch:"Voice"},
+    {dept:"canteen",issue:"Amma Canteen closed without notice",pin:"636001",status:"Resolved",ch:"WhatsApp",rating:5},
+    {dept:"school",issue:"Mid-day meal quality very poor",pin:"641003",status:"In Progress",ch:"Voice"},
+  ];
+  return rows.map((r,i)=>{
+    const loc=PINCODE_DB[r.pin]||{city:"Coimbatore",ward:"Central",corporation:"Coimbatore City",op:"CCMC"};
+    const d=DEPTS.find(x=>x.id===r.dept)||DEPTS[0];
+    const filedAt=new Date(Date.now()-(i+1)*3600000*(1+Math.random()*10));
+    return{
+      id:"GQ-"+String(1000+i),dept:r.dept,issue:r.issue,pin:r.pin,
+      city:loc.city,ward:loc.ward,zone:loc.zone,corporation:loc.corporation,
+      phone:"98"+String(Math.floor(Math.random()*1e8)).padStart(8,"0"),
+      name:rand(["Ravi Kumar","Meena Devi","Selvam R","Priya S","Kannan T"]),
+      status:r.status,officer:(OFFICERS[r.dept]||{})[loc.op]||"Officer Pending",
+      rating:r.rating||null,filedAt,channel:r.ch,
+      escalated:r.status==="Filed"&&(Date.now()-filedAt>72*3600000),
+    };
+  });
+}
+
+// ── STATE ─────────────────────────────────────────────────
+let state={
+  tab:"agent",
+  phase:"idle", // idle|greeting|collecting|thinking|speaking|listening|done
+  lang:"tamil",
+  transcript:[],
+  ticket:null,
+  toast:null,
+  complaints:seedData(),
+  conv:[],
+  collected:{},
+  // CRM filters
+  deptF:"all",statF:"all",cityF:"all",search:"",selected:null,
+  waveActive:false,
+};
+
+function setState(patch){
+  Object.assign(state,typeof patch==="function"?patch(state):patch);
+  render();
+}
+
+// ── AGENT LOGIC ───────────────────────────────────────────
+function startCall(){
+  state.transcript=[];state.conv=[];state.collected={};state.ticket=null;
+  state.phase="greeting";state.lang="tamil";state.waveActive=true;
+  render();
+  const greeting="வணக்கம் சார்! என் பெயர் லக்ஷ்மி. நான் GrievanceQ கம்பெனியோட AI உதவியாளர். உங்களுக்கு என்ன உதவி வேணும்னு சொல்லுங்க சார்!";
+  state.transcript=[{role:"agent",text:greeting,time:new Date()}];
+  state.phase="speaking";render();
+  speakEL(greeting,true,()=>{
+    state.waveActive=false;state.phase="collecting";render();
+  });
+}
+
+function endCall(){
+  if(currentAudio)try{currentAudio.pause();}catch(e){}
+  window.speechSynthesis?.cancel();
+  state.phase="idle";state.waveActive=false;render();
+}
+
+async function processMsg(userText){
+  if(!userText.trim()||state.phase==="thinking"||state.phase==="speaking")return;
+  const lang=state.conv.length===0?detectLang(userText):state.lang;
+  if(state.conv.length===0)state.lang=lang;
+  const isTamil=state.lang==="tamil";
+
+  state.transcript=[...state.transcript,{role:"user",text:userText,time:new Date()}];
+  state.conv=[...state.conv,{role:"user",content:userText}];
+  state.phase="thinking";render();
+
+  // Extract data
+  const pm=userText.match(/\b6\d{5}\b/);if(pm)state.collected.pincode=pm[0];
+  const phm=userText.match(/\b[6-9]\d{9}\b/);if(phm)state.collected.phone=phm[0];
+  const nm=userText.match(/(?:my name is|i am|i'm|name[:\-]?\s*)([A-Za-z\s]{2,30})/i);if(nm)state.collected.name=nm[1].trim();
+  const dh=detectDept(userText);if(dh)state.collected.dept=dh.id;
+  if(userText.length>30&&!state.collected.issue)state.collected.issue=userText;
+
+  const pInfo=state.collected.pincode?lookupPin(state.collected.pincode):null;
+
+  const system=`You are Lakshmi, a warm Tamil woman AI voice agent for GrievanceQ — Tamil Nadu municipal grievance system.
+
+LANGUAGE: ${isTamil?"Use warm Kongu Tamil: சார், ஆமா சார், சரிங்க, சொல்லுங்க":"Use warm simple English"}
+NEVER mix languages.
+
+Collect ALL 5 before creating ticket:
+1. Name (பெயர்)
+2. Mobile (10 digits)  
+3. Pincode (6 digits starting with 6)
+4. Department/problem type
+5. Problem details
+
+Already collected: ${JSON.stringify(state.collected)}
+Pincode info: ${pInfo?JSON.stringify(pInfo):"not provided yet"}
+
+RULES:
+- Ask ONE missing item at a time
+- Keep replies SHORT (2-3 sentences max)
+- Be warm and empathetic
+- Once ALL 5 collected AND pincode valid: confirm ticket and add TICKET_READY at end`;
+
+  try{
+    const reply=await callClaude(state.conv,system);
+    const ready=reply.includes("TICKET_READY");
+    const clean=reply.replace("TICKET_READY","").trim();
+    state.conv=[...state.conv,{role:"assistant",content:clean}];
+    state.transcript=[...state.transcript,{role:"agent",text:clean,time:new Date()}];
+    state.phase="speaking";state.waveActive=true;render();
+
+    if(ready&&pInfo&&state.collected.dept){
+      const d=DEPTS.find(x=>x.id===state.collected.dept)||DEPTS[0];
+      const t={
+        id:genId(),dept:d.id,
+        issue:state.collected.issue||`${d.label} complaint`,
+        pin:state.collected.pincode,city:pInfo.city,ward:pInfo.ward,
+        zone:pInfo.zone,corporation:pInfo.corporation,
+        phone:state.collected.phone||"—",name:state.collected.name||"Citizen",
+        status:"Filed",officer:(OFFICERS[d.id]||{})[pInfo.op]||"Officer Pending",
+        rating:null,filedAt:new Date(),channel:"Voice",escalated:false,
+      };
+      state.ticket=t;
+      state.complaints=[t,...state.complaints];
+      showToast(`✓ Ticket ${t.id} created — ${pInfo.ward}, ${pInfo.city}`);
+    }
+
+    speakEL(clean,isTamil,()=>{
+      state.waveActive=false;
+      state.phase=ready?"done":"collecting";
+      render();
+    });
+  }catch(e){
+    const err=isTamil?"மன்னிக்கவும், இணைப்பு சிக்கல். மீண்டும் முயற்சிக்கவும்.":"Sorry, connection issue. Please try again.";
+    state.transcript=[...state.transcript,{role:"agent",text:err,time:new Date()}];
+    state.phase="collecting";render();
+    console.error(e);
+  }
+}
+
+function showToast(msg,type="ok"){
+  state.toast={msg,type};render();
+  setTimeout(()=>{state.toast=null;render();},3500);
+}
+
+function startMic(){
+  navigator.mediaDevices?.getUserMedia({audio:true}).then(()=>{
+    const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+    if(!SR){showToast("Mic not supported. Please type.","warn");return;}
+    const rec=new SR();
+    rec.lang=state.lang==="tamil"?"ta-IN":"en-IN";
+    rec.interimResults=false;rec.continuous=false;
+    state.phase="listening";state.waveActive=true;render();
+    showToast("🎙 Listening... speak now");
+    rec.onresult=e=>{
+      const t=e.results[0][0].transcript;
+      state.waveActive=false;render();
+      processMsg(t);
+    };
+    rec.onerror=e=>{
+      state.waveActive=false;state.phase="collecting";render();
+      showToast("Mic error: "+e.error+". Please type.","warn");
+    };
+    rec.onend=()=>{if(state.phase==="listening"){state.waveActive=false;state.phase="collecting";render();}};
+    rec.start();
+  }).catch(()=>showToast("Mic access denied. Please type.","warn"));
+}
+
+// ── RENDER ────────────────────────────────────────────────
+const STATUS_STEPS=["Filed","Assigned","In Progress","Resolved"];
+const phaseInfo={
+  idle:{text:"Ready to Answer",color:"#4A7AAA"},
+  greeting:{text:"Connecting...",color:"#C8921A"},
+  collecting:{text:"Listening for your response",color:"#0A7B7B"},
+  listening:{text:"🎙 Listening...",color:"#1A6A9A"},
+  thinking:{text:"Processing...",color:"#C8921A"},
+  speaking:{text:"Lakshmi is speaking...",color:"#22C55E"},
+  done:{text:"Ticket created ✓",color:"#22C55E"},
+};
+
+function timeSince(d){
+  const m=Math.floor((Date.now()-new Date(d))/60000);
+  if(m<60)return m+"m ago";
+  const h=Math.floor(m/60);if(h<24)return h+"h ago";
+  return Math.floor(h/24)+"d ago";
+}
+
+function getDept(id){return DEPTS.find(d=>d.id===id)||DEPTS[0];}
+
+function render(){
+  const s=state;
+  const pl=phaseInfo[s.phase]||{text:"",color:"#fff"};
+  const fields=[
+    {key:"name",label:"Name",done:!!s.collected.name},
+    {key:"phone",label:"Mobile",done:!!s.collected.phone},
+    {key:"pincode",label:"Pincode",done:!!s.collected.pincode&&!!lookupPin(s.collected.pincode)},
+    {key:"dept",label:"Department",done:!!s.collected.dept},
+    {key:"issue",label:"Details",done:!!s.collected.issue},
+  ];
+  const prog=Math.round(fields.filter(f=>f.done).length/5*100);
+  const cities=[...new Set(s.complaints.map(c=>c.city))];
+  const filtered=s.complaints.filter(c=>{
+    if(s.deptF!=="all"&&c.dept!==s.deptF)return false;
+    if(s.statF!=="all"&&c.status!==s.statF)return false;
+    if(s.cityF!=="all"&&c.city!==s.cityF)return false;
+    if(s.search&&![c.id,c.issue,c.ward,c.name,c.pin].some(f=>(f||"").toLowerCase().includes(s.search.toLowerCase())))return false;
+    return true;
+  });
+  const kpis={
+    total:s.complaints.length,
+    resolved:s.complaints.filter(c=>c.status==="Resolved").length,
+    pending:s.complaints.filter(c=>c.status!=="Resolved").length,
+    voice:s.complaints.filter(c=>c.channel==="Voice").length,
+    breached:s.complaints.filter(c=>c.escalated).length,
+    rating:(s.complaints.filter(c=>c.rating).reduce((a,c)=>a+c.rating,0)/Math.max(1,s.complaints.filter(c=>c.rating).length)).toFixed(1),
+  };
+
+  document.getElementById("app").innerHTML=`
+  <!-- TOAST -->
+  ${s.toast?`<div style="position:fixed;top:16px;right:16px;z-index:9999;background:${s.toast.type==="ok"?"#166534":"#92400E"};color:#fff;padding:10px 18px;border-radius:10px;font-size:13px;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,.3)">${s.toast.msg}</div>`:""}
+
+  <!-- HEADER -->
+  <header style="background:#122850;padding:0 20px;height:54px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+    <div style="display:flex;align-items:center;gap:10px">
+      <div style="width:34px;height:34px;border-radius:50%;background:#B8860B;display:flex;align-items:center;justify-content:center;font-size:18px">⚖️</div>
+      <div>
+        <div style="color:#fff;font-weight:800;font-size:15px;line-height:1">GrievanceQ</div>
+        <div style="color:#7EA8D0;font-size:9px;letter-spacing:.5px">TAMIL NADU MUNICIPAL AI</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:6px">
+      <button onclick="setState({tab:'agent'})" style="padding:6px 16px;border-radius:8px;border:none;cursor:pointer;font-size:12px;font-weight:700;background:${s.tab==="agent"?"#B8860B":"rgba(255,255,255,.1)"};color:#fff">🎙 AI Voice Agent</button>
+      <button onclick="setState({tab:'dashboard'})" style="padding:6px 16px;border-radius:8px;border:none;cursor:pointer;font-size:12px;font-weight:700;background:${s.tab==="dashboard"?"#B8860B":"rgba(255,255,255,.1)"};color:#fff">📊 CRM Dashboard</button>
+    </div>
+    <div style="color:#7EA8D0;font-size:11px;display:flex;align-items:center;gap:5px">
+      <span style="width:7px;height:7px;border-radius:50%;background:#22C55E;display:inline-block"></span>
+      LIVE · ${new Date().toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"})}
+    </div>
+  </header>
+
+  ${s.tab==="agent"?`
+  <!-- AGENT TAB -->
+  <div style="flex:1;display:flex;overflow:hidden;height:calc(100vh - 54px)">
+    <!-- LEFT PANEL -->
+    <div style="width:320px;background:#0D2040;display:flex;flex-direction:column;align-items:center;padding:16px;gap:12px;overflow-y:auto;flex-shrink:0">
+      <!-- Avatar -->
+      <div style="width:100px;height:100px;border-radius:50%;background:${s.phase==="speaking"?"radial-gradient(circle,#22C55E,#15803D)":s.phase==="thinking"?"radial-gradient(circle,#F59E0B,#B45309)":s.phase==="idle"?"radial-gradient(circle,#1E3D6E,#0D2040)":"radial-gradient(circle,#0A7B7B,#065F46)"};display:flex;align-items:center;justify-content:center;font-size:44px;box-shadow:${s.phase!=="idle"?"0 0 0 8px rgba(34,197,94,.2),0 0 0 16px rgba(34,197,94,.08)":"none"};transition:all .5s;margin-top:8px">🎙</div>
+      
+      <div style="text-align:center">
+        <div style="color:#fff;font-weight:800;font-size:16px">Lakshmi</div>
+        <div style="color:#4A8AAA;font-size:11px">GrievanceQ AI · கொங்கு தமிழ்</div>
+        <div style="color:${pl.color};font-weight:700;font-size:12px;margin-top:4px">${pl.text}</div>
+        ${s.phase!=="idle"?`<div style="margin-top:6px;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;background:rgba(34,197,94,.15);color:#22C55E;border:1px solid #22C55E;display:inline-block">🎵 ${s.lang==="tamil"?"Vanishree — Tamil":"Meesha — English"}</div>`:""}
+      </div>
+
+      <!-- Waveform -->
+      <div style="display:flex;gap:3px;align-items:flex-end;height:28px">
+        ${[1,2,3,4,5,6,7].map((h,i)=>`<div style="width:4px;border-radius:3px;background:${s.waveActive?"#22C55E":"#2A5298"};height:${s.waveActive?(12+Math.sin(i)*8)+"px":"8px"};${s.waveActive?`animation:wave ${0.5+i*0.1}s ease-in-out infinite alternate`:""};transition:height 0.15s"></div>`).join("")}
+      </div>
+
+      <!-- Call button -->
+      ${s.phase==="idle"
+        ?`<button onclick="startCall()" style="width:100%;padding:14px;border-radius:12px;border:none;background:linear-gradient(135deg,#22C55E,#15803D);color:#fff;font-weight:800;font-size:15px;cursor:pointer">🎙 Call Lakshmi</button>`
+        :`<button onclick="endCall()" style="width:100%;padding:12px;border-radius:12px;border:none;background:#C0392B;color:#fff;font-weight:800;font-size:14px;cursor:pointer">✕ End Call</button>`
+      }
+
+      <!-- Mic button -->
+      ${s.phase==="collecting"?`<button onclick="startMic()" style="width:100%;padding:10px;border-radius:12px;border:1.5px solid #4A7AAA;background:rgba(74,122,170,.15);color:#7EA8D0;font-weight:700;font-size:13px;cursor:pointer">🎤 Tap to Speak</button>`:""}
+
+      <!-- Progress -->
+      ${s.phase!=="idle"?`
+      <div style="width:100%;background:#1A2D4A;border-radius:12px;padding:12px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+          <span style="color:#7EA8D0;font-size:11px;font-weight:700">COLLECTING DETAILS</span>
+          <span style="color:#B8860B;font-size:11px;font-weight:700">${prog}%</span>
+        </div>
+        <div style="height:5px;background:#0D2040;border-radius:3px;margin-bottom:8px;overflow:hidden">
+          <div style="height:100%;width:${prog}%;background:linear-gradient(90deg,#22C55E,#15803D);border-radius:3px;transition:width .4s"></div>
+        </div>
+        ${fields.map(f=>`
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+          <div style="width:16px;height:16px;border-radius:50%;background:${f.done?"#22C55E":"#1A2D4A"};border:1.5px solid ${f.done?"#22C55E":"#3A5A7A"};display:flex;align-items:center;justify-content:center;font-size:9px;color:#fff;flex-shrink:0">${f.done?"✓":""}</div>
+          <span style="font-size:11px;color:${f.done?"#A0E8A0":"#4A7AAA"}">${f.label}</span>
+          ${f.key==="pincode"&&s.collected.pincode?`<span style="font-size:10px;color:#B8860B;margin-left:auto">${lookupPin(s.collected.pincode)?.city||"?"}</span>`:""}
+        </div>`).join("")}
+      </div>`:""}
+
+      <!-- Current ticket -->
+      ${s.ticket?`
+      <div style="width:100%;background:rgba(184,134,11,.15);border:1.5px solid #B8860B;border-radius:12px;padding:14px">
+        <div style="color:#B8860B;font-weight:800;font-size:11px;margin-bottom:6px">✓ TICKET CREATED</div>
+        <div style="color:#fff;font-weight:900;font-size:20px">${s.ticket.id}</div>
+        <div style="color:#A8C4E0;font-size:11px;margin-top:4px">${getDept(s.ticket.dept).emoji} ${getDept(s.ticket.dept).label}</div>
+        <div style="color:#A8C4E0;font-size:11px">${s.ticket.ward}, ${s.ticket.city}</div>
+        <div style="color:#7EA8D0;font-size:10px">Officer: ${s.ticket.officer}</div>
+      </div>`:""}
+
+      <!-- Dept list -->
+      <div style="width:100%">
+        <div style="color:#3A5A7A;font-size:10px;font-weight:700;text-transform:uppercase;margin-bottom:8px">Departments & SLA</div>
+        ${DEPTS.map(d=>`
+        <div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #1A2D4A">
+          <span style="font-size:14px">${d.emoji}</span>
+          <div>
+            <div style="color:#A8C4E0;font-size:10px;font-weight:600">${d.label}</div>
+            <div style="color:#3A5A7A;font-size:9px">${d.tamil} · SLA ${d.sla}</div>
+          </div>
+        </div>`).join("")}
+      </div>
+    </div>
+
+    <!-- RIGHT — Transcript -->
+    <div style="flex:1;display:flex;flex-direction:column;overflow:hidden">
+      <div style="padding:12px 20px;background:#FFFCF7;border-bottom:1.5px solid #DDD0BE">
+        <div style="font-weight:800;color:#1B3A6B;font-size:15px">Live Call Transcript</div>
+        <div style="font-size:11px;color:#6B6152">${s.phase==="idle"?"Click 'Call Lakshmi' to begin":"Powered by ElevenLabs · "+(s.lang==="tamil"?"Vanishree (Tamil)":"Meesha (English)")}</div>
+      </div>
+
+      <div id="chat" style="flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:14px">
+        ${s.phase==="idle"&&s.transcript.length===0?`
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;text-align:center;padding:40px 20px">
+          <div style="font-size:56px">🎙</div>
+          <div style="font-size:18px;font-weight:800;color:#1B3A6B">Lakshmi — Your AI Grievance Agent</div>
+          <div style="font-size:13px;color:#6B6152;max-width:360px;line-height:1.7">
+            Greets in Kongu Tamil via <b>Meesha</b> voice.<br/>
+            Switches to English via <b>Vanisher</b> voice based on your reply.
+          </div>
+          <div style="background:#FFFCF7;border:1.5px solid #DDD0BE;border-radius:12px;padding:14px;max-width:380px;text-align:left">
+            <b style="color:#1B3A6B">Try saying:</b><br/>
+            <i style="color:#6B6152">"என் பெயர் ரவி. பின்கோடு 641005. தண்ணீர் வரலை."</i><br/>
+            <i style="color:#6B6152">"My name is Ravi. Pincode 641005. No water supply."</i>
+          </div>
+        </div>`:""}
+
+        ${s.transcript.map(m=>`
+        <div style="display:flex;flex-direction:${m.role==="user"?"row-reverse":"row"};gap:10px;align-items:flex-start">
+          <div style="width:36px;height:36px;border-radius:50%;flex-shrink:0;background:${m.role==="agent"?"#1B3A6B":"#B8860B"};display:flex;align-items:center;justify-content:center;font-size:16px">${m.role==="agent"?"🎙":"👤"}</div>
+          <div style="max-width:70%">
+            <div style="font-size:10px;color:#6B6152;margin-bottom:4px;text-align:${m.role==="user"?"right":"left"}">${m.role==="agent"?"Lakshmi (AI)":"You"} · ${new Date(m.time).toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"})}</div>
+            <div style="padding:11px 15px;border-radius:16px;border-top-left-radius:${m.role==="agent"?"4px":"16px"};border-top-right-radius:${m.role==="user"?"4px":"16px"};background:${m.role==="agent"?"#fff":"#1B3A6B"};color:${m.role==="agent"?"#1B3A6B":"#fff"};font-size:13.5px;line-height:1.6;box-shadow:0 2px 8px rgba(0,0,0,.08)">${m.text}</div>
+          </div>
+        </div>`).join("")}
+        <div id="chatBottom"></div>
+      </div>
+
+      <!-- Input -->
+      ${s.phase!=="idle"?`
+      <div style="padding:14px;background:#FFFCF7;border-top:1.5px solid #DDD0BE;display:flex;gap:10px">
+        <input id="msgInput" value="" onkeydown="if(event.key==='Enter')sendMsg()" placeholder="${s.phase==="collecting"?"Type your response or tap 🎤 to speak...":"Please wait..."}" 
+          ${s.phase!=="collecting"?"disabled":""}
+          style="flex:1;padding:10px 14px;border-radius:12px;border:1.5px solid #DDD0BE;font-size:13px;background:#FFFCF7;outline:none"/>
+        <button onclick="sendMsg()" ${s.phase!=="collecting"?"disabled":""}
+          style="padding:10px 20px;border-radius:12px;border:none;background:#1B3A6B;color:#fff;font-weight:700;font-size:13px;cursor:pointer;opacity:${s.phase==="collecting"?"1":"0.5"}">Send →</button>
+      </div>`:""}
+    </div>
+  </div>
+  `:`
+  <!-- DASHBOARD TAB -->
+  <div style="flex:1;overflow-y:auto;padding:18px">
+    <!-- KPIs -->
+    <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:16px">
+      ${[
+        {v:kpis.total,l:"Total",sub:"All complaints",c:"#1B3A6B"},
+        {v:kpis.resolved,l:"Resolved",sub:Math.round(kpis.resolved/Math.max(1,kpis.total)*100)+"% resolved",c:"#166534"},
+        {v:kpis.pending,l:"Pending",sub:"Need action",c:"#D4890A"},
+        {v:kpis.breached,l:"Escalated",sub:"SLA breached",c:"#C0392B"},
+        {v:kpis.rating+"/5",l:"Rating",sub:"Satisfaction",c:"#0A7B7B"},
+        {v:kpis.voice,l:"Voice AI",sub:"Calls handled",c:"#6B3FA0"},
+      ].map(k=>`<div style="background:#FFFCF7;border-radius:12px;padding:13px 15px;box-shadow:0 2px 8px rgba(0,0,0,.06)">
+        <div style="font-size:24px;font-weight:900;color:${k.c};line-height:1">${k.v}</div>
+        <div style="font-size:12px;font-weight:700;color:#1B3A6B;margin-top:4px">${k.l}</div>
+        <div style="font-size:10px;color:#6B6152;margin-top:2px">${k.sub}</div>
+      </div>`).join("")}
+    </div>
+
+    <!-- Complaints table -->
+    <div style="background:#FFFCF7;border-radius:14px;padding:16px;box-shadow:0 2px 8px rgba(0,0,0,.06)">
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
+        <span style="font-weight:800;color:#1B3A6B;font-size:14px">All Complaints</span>
+        <input value="${s.search}" oninput="setState({search:this.value})" placeholder="Search..." style="padding:5px 11px;border-radius:8px;border:1.5px solid #DDD0BE;font-size:12px;background:#FFFCF7"/>
+        <select onchange="setState({cityF:this.value})" style="padding:5px 10px;border-radius:8px;border:1.5px solid #DDD0BE;font-size:12px;background:#FFFCF7">
+          <option value="all">All Cities</option>
+          ${cities.map(c=>`<option ${s.cityF===c?"selected":""}>${c}</option>`).join("")}
+        </select>
+        <select onchange="setState({deptF:this.value})" style="padding:5px 10px;border-radius:8px;border:1.5px solid #DDD0BE;font-size:12px;background:#FFFCF7">
+          <option value="all">All Departments</option>
+          ${DEPTS.map(d=>`<option value="${d.id}" ${s.deptF===d.id?"selected":""}>${d.emoji} ${d.label}</option>`).join("")}
+        </select>
+        <select onchange="setState({statF:this.value})" style="padding:5px 10px;border-radius:8px;border:1.5px solid #DDD0BE;font-size:12px;background:#FFFCF7">
+          <option value="all">All Statuses</option>
+          ${STATUS_STEPS.map(s=>`<option ${state.statF===s?"selected":""}>${s}</option>`).join("")}
+        </select>
+        <div style="margin-left:auto;font-size:11px;color:#6B6152">${filtered.length} complaints</div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:90px 1fr 110px 100px 120px 90px 100px;gap:8px;padding:6px 10px;background:#EDE8DF;border-radius:8px;margin-bottom:6px">
+        ${["Ticket","Issue","Dept","Channel","City/Ward","Status","Update"].map(h=>`<div style="font-size:10px;font-weight:700;color:#6B6152;text-transform:uppercase">${h}</div>`).join("")}
+      </div>
+      <div style="max-height:400px;overflow-y:auto">
+        ${filtered.map(c=>{
+          const d=getDept(c.dept);
+          return`<div style="display:grid;grid-template-columns:90px 1fr 110px 100px 120px 90px 100px;gap:8px;padding:8px 10px;border-bottom:1px solid #EDE8DF;cursor:pointer;align-items:center" onclick="setState({selected:${JSON.stringify(c).replace(/"/g,"&quot;")}})">
+            <div style="font-size:11px;font-weight:800;color:#1B3A6B">${c.id}</div>
+            <div style="font-size:11px;color:#1B3A6B;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.issue}</div>
+            <div style="font-size:10px;font-weight:700;color:${d.color}">${d.emoji} ${d.label}</div>
+            <div style="font-size:10px;color:#6B6152">${c.channel==="Voice"?"🎙 Voice":c.channel}</div>
+            <div><div style="font-size:10px;font-weight:700;color:#1B3A6B">${c.city}</div><div style="font-size:9px;color:#6B6152">${c.ward}</div></div>
+            <div><span style="padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;background:${{Filed:"#FEF3C7",Assigned:"#DBEAFE","In Progress":"#D1FAE5",Resolved:"#DCFCE7"}[c.status]||"#FEF3C7"};color:${{Filed:"#92400E",Assigned:"#1E3A8A","In Progress":"#065F46",Resolved:"#166534"}[c.status]||"#92400E"}">${c.status}</span></div>
+            <div><select onchange="updateStatus('${c.id}',this.value)" onclick="event.stopPropagation()" style="font-size:10px;padding:2px 5px;border-radius:6px;border:1.5px solid #DDD0BE;background:#FFFCF7;cursor:pointer">
+              ${STATUS_STEPS.map(ss=>`<option ${c.status===ss?"selected":""}>${ss}</option>`).join("")}
+            </select></div>
+          </div>`;
+        }).join("")}
+        ${!filtered.length?`<div style="text-align:center;padding:32px;color:#6B6152">No complaints found</div>`:""}
+      </div>
+    </div>
+  </div>
+  `}
+  `;
+
+  // Scroll chat to bottom
+  setTimeout(()=>{
+    const b=document.getElementById("chatBottom");
+    if(b)b.scrollIntoView({behavior:"smooth"});
+  },50);
+}
+
+function sendMsg(){
+  const inp=document.getElementById("msgInput");
+  if(!inp||!inp.value.trim())return;
+  const txt=inp.value.trim();
+  if(txt.length>30)state.collected.issue=txt;
+  processMsg(txt);
+  inp.value="";
+}
+
+function updateStatus(id,status){
+  state.complaints=state.complaints.map(c=>c.id===id?{...c,status}:c);
+  render();
+}
+
+// Initial render
+render();
+</script>
+</body>
+</html>
